@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify, render_template_string
+from time import time
 
 app = Flask(__name__)
 
 current_command = "none"
+last_ping = 0  # Dernier ping du client
 
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -12,6 +14,8 @@ HTML_PAGE = """
 </head>
 <body>
     <h1>Panneau de contrôle</h1>
+
+    <p id="status">Statut : en attente...</p>
 
     <button onclick="send('hydra')">Hydra +1</button>
     <button onclick="send('popup')">Popup drôle</button>
@@ -26,6 +30,24 @@ HTML_PAGE = """
                 body: JSON.stringify({command: cmd})
             });
         }
+
+        async function updateStatus() {
+            try {
+                const res = await fetch('/status');
+                const data = await res.json();
+
+                if (data.running) {
+                    document.getElementById("status").textContent = "🟢 Programme lancé";
+                } else {
+                    document.getElementById("status").textContent = "🔴 Programme non lancé";
+                }
+            } catch {
+                document.getElementById("status").textContent = "🔴 Hors ligne";
+            }
+        }
+
+        setInterval(updateStatus, 1000);
+        updateStatus();
     </script>
 </body>
 </html>
@@ -48,6 +70,20 @@ def get_command():
     cmd = current_command
     current_command = "none"
     return jsonify({"command": cmd})
+
+@app.route("/ping")
+def ping():
+    global last_ping
+    last_ping = time()
+    return jsonify({"status": "ok"})
+
+@app.route("/status")
+def status():
+    global last_ping
+    if time() - last_ping < 10:
+        return jsonify({"running": True})
+    else:
+        return jsonify({"running": False})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
